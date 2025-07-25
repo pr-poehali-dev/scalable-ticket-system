@@ -10,60 +10,524 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 
-export default function Index() {
-  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState('dashboard');
+// Import dialogs
+import IntegrationDialog, { Integration, IntegrationType } from '@/components/dialogs/IntegrationDialog';
+import TicketDialog, { Ticket, Client, Employee as TicketEmployee, Department as TicketDepartment } from '@/components/dialogs/TicketDialog';
+import TicketDetailDialog from '@/components/dialogs/TicketDetailDialog';
+import DepartmentDialog, { Department, Employee as DepartmentEmployee } from '@/components/dialogs/DepartmentDialog';
+import EmployeeDialog, { Employee } from '@/components/dialogs/EmployeeDialog';
 
-  // Mock data
-  const tickets = [
+// Mock data interfaces
+interface TicketMessage {
+  id: string;
+  ticketId: string;
+  message: string;
+  authorId: string;
+  authorName: string;
+  authorType: 'client' | 'agent' | 'system';
+  isInternal: boolean;
+  createdAt: string;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    url: string;
+    size: number;
+  }>;
+}
+
+export default function Index() {
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [activeSection, setActiveSection] = useState('dashboard');
+  
+  // Dialog states
+  const [integrationDialog, setIntegrationDialog] = useState<{ open: boolean; integration?: Integration }>({ open: false });
+  const [ticketDialog, setTicketDialog] = useState<{ open: boolean; ticket?: Ticket }>({ open: false });
+  const [ticketDetailDialog, setTicketDetailDialog] = useState<{ open: boolean; ticket?: Ticket }>({ open: false });
+  const [departmentDialog, setDepartmentDialog] = useState<{ open: boolean; department?: Department }>({ open: false });
+  const [employeeDialog, setEmployeeDialog] = useState<{ open: boolean; employee?: Employee }>({ open: false });
+  
+  // Mock data state
+  const [integrations, setIntegrations] = useState<Integration[]>([
     {
-      id: '#T-2024-001',
-      subject: 'Проблема с интеграцией Telegram Bot',
-      client: 'ООО "ТехСервис"',
-      status: 'in_progress',
-      priority: 'high',
-      channel: 'telegram',
-      assignee: 'Иван Петров',
-      created: '2 часа назад',
-      sla: 'В норме (осталось 4ч)',
-      department: 'Техподдержка'
+      id: '1',
+      name: 'Основной Telegram Bot',
+      type: 'telegram',
+      status: 'active',
+      config: { botToken: '***', webhookUrl: 'https://api.company.com/webhook/telegram' },
+      createdAt: '2024-01-15T10:30:00Z',
+      lastSync: '2024-01-25T14:20:00Z',
+      messagesCount: 156
     },
     {
-      id: '#T-2024-002',
+      id: '2',
+      name: 'WhatsApp Business',
+      type: 'whatsapp',
+      status: 'active',
+      config: { accessToken: '***', phoneNumberId: '123456789' },
+      createdAt: '2024-01-20T09:15:00Z',
+      lastSync: '2024-01-25T14:18:00Z',
+      messagesCount: 89
+    }
+  ]);
+  
+  const [tickets, setTickets] = useState<Ticket[]>([
+    {
+      id: 'T-2024-001',
+      subject: 'Проблема с интеграцией Telegram Bot',
+      message: 'Здравствуйте! У нас возникла проблема с подключением Telegram бота. Не приходят уведомления о новых сообщениях.',
+      status: 'open',
+      priority: 'high',
+      clientId: 'client-1',
+      clientName: 'ООО "ТехСервис"',
+      assigneeId: 'emp-1',
+      assigneeName: 'Иван Петров',
+      departmentId: 'dept-1',
+      departmentName: 'Техподдержка',
+      channelType: 'telegram',
+      channelId: '@company_bot',
+      createdAt: '2024-01-25T10:30:00Z',
+      updatedAt: '2024-01-25T14:20:00Z',
+      slaDeadline: '2024-01-26T10:30:00Z',
+      tags: ['интеграция', 'telegram', 'критично'],
+      customFields: { customerType: 'business', source: 'website' }
+    },
+    {
+      id: 'T-2024-002',
       subject: 'Настройка WhatsApp Business API',
-      client: 'ИП Сидоров А.В.',
+      message: 'Нужна помощь с настройкой WhatsApp Business API для получения сообщений от клиентов.',
       status: 'new',
       priority: 'medium',
-      channel: 'whatsapp',
-      assignee: 'Анна Иванова',
-      created: '45 минут назад',
-      sla: 'Просрочено (2ч 15м)',
-      department: 'Интеграции'
+      clientId: 'client-2',
+      clientName: 'ИП Сидоров А.В.',
+      assigneeId: 'emp-2',
+      assigneeName: 'Анна Иванова',
+      departmentId: 'dept-2',
+      departmentName: 'Интеграции',
+      channelType: 'whatsapp',
+      channelId: '+79123456789',
+      createdAt: '2024-01-25T13:15:00Z',
+      updatedAt: '2024-01-25T13:15:00Z',
+      slaDeadline: '2024-01-26T13:15:00Z',
+      tags: ['whatsapp', 'настройка'],
+      customFields: { customerType: 'individual', source: 'phone' }
+    }
+  ]);
+  
+  const [clients, setClients] = useState<Client[]>([
+    { id: 'client-1', name: 'ООО "ТехСервис"', email: 'contact@techservice.ru', phone: '+7 (495) 123-45-67' },
+    { id: 'client-2', name: 'ИП Сидоров А.В.', email: 'sidorov@example.com', phone: '+7 (915) 234-56-78' },
+    { id: 'client-3', name: 'StartupTech Ltd', email: 'hello@startuptech.io', phone: '+7 (812) 345-67-89' }
+  ]);
+  
+  const [employees, setEmployees] = useState<Employee[]>([
+    {
+      id: 'emp-1',
+      name: 'Иван Петров',
+      email: 'ivan@company.com',
+      phone: '+7 (999) 111-11-11',
+      role: 'admin',
+      departmentId: 'dept-1',
+      departmentName: 'Техподдержка',
+      isActive: true,
+      avatar: '',
+      joinDate: '2023-01-15T00:00:00Z',
+      workingHours: {
+        start: '09:00',
+        end: '18:00',
+        timezone: 'Europe/Moscow',
+        workDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      },
+      permissions: ['tickets_view', 'tickets_create', 'tickets_edit', 'tickets_delete'],
+      maxTickets: 15,
+      currentTickets: 8,
+      bio: 'Опытный администратор системы с 5+ лет опыта',
+      skills: ['Техническая поддержка', 'API интеграции', 'JavaScript'],
+      languages: ['Русский', 'Английский'],
+      customFields: {},
+      stats: {
+        totalTickets: 156,
+        avgResponseTime: 1.2,
+        satisfactionRating: 4.9,
+        resolvedTickets: 148
+      }
     },
     {
-      id: '#T-2024-003',
-      subject: 'Вопрос по API документации',
-      client: 'StartupTech Ltd',
-      status: 'resolved',
-      priority: 'low',
-      channel: 'email',
-      assignee: 'Михаил Козлов',
-      created: '1 день назад',
-      sla: 'Выполнено в срок',
-      department: 'Разработка'
+      id: 'emp-2',
+      name: 'Анна Иванова',
+      email: 'anna@company.com',
+      phone: '+7 (999) 222-22-22',
+      role: 'manager',
+      departmentId: 'dept-2',
+      departmentName: 'Интеграции',
+      isActive: true,
+      avatar: '',
+      joinDate: '2023-03-20T00:00:00Z',
+      workingHours: {
+        start: '10:00',
+        end: '19:00',
+        timezone: 'Europe/Moscow',
+        workDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      },
+      permissions: ['tickets_view', 'tickets_create', 'tickets_edit'],
+      maxTickets: 12,
+      currentTickets: 5,
+      bio: 'Менеджер по интеграциям и работе с клиентами',
+      skills: ['Менеджмент', 'API интеграции', 'Продажи'],
+      languages: ['Русский', 'Английский', 'Немецкий'],
+      customFields: {},
+      stats: {
+        totalTickets: 89,
+        avgResponseTime: 2.1,
+        satisfactionRating: 4.7,
+        resolvedTickets: 82
+      }
     }
-  ];
+  ]);
+  
+  const [departments, setDepartments] = useState<Department[]>([
+    {
+      id: 'dept-1',
+      name: 'Техподдержка',
+      description: 'Отдел технической поддержки клиентов',
+      color: 'blue',
+      managerId: 'emp-1',
+      managerName: 'Иван Петров',
+      employeeCount: 5,
+      slaHours: 24,
+      isActive: true,
+      autoAssignment: true,
+      workingHours: {
+        start: '09:00',
+        end: '18:00',
+        timezone: 'Europe/Moscow',
+        workDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      },
+      emailTemplate: 'Здравствуйте! Ваш тикет был получен и передан в департамент {{department_name}}.',
+      customFields: { defaultPriority: 'medium', maxTicketsPerEmployee: 10 },
+      createdAt: '2024-01-01T00:00:00Z'
+    },
+    {
+      id: 'dept-2',
+      name: 'Интеграции',
+      description: 'Отдел по работе с интеграциями и API',
+      color: 'green',
+      managerId: 'emp-2',
+      managerName: 'Анна Иванова',
+      employeeCount: 3,
+      slaHours: 48,
+      isActive: true,
+      autoAssignment: true,
+      workingHours: {
+        start: '10:00',
+        end: '19:00',
+        timezone: 'Europe/Moscow',
+        workDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+      },
+      emailTemplate: 'Ваш запрос по интеграции принят в работу командой {{department_name}}.',
+      customFields: { defaultPriority: 'high', maxTicketsPerEmployee: 8 },
+      createdAt: '2024-01-01T00:00:00Z'
+    }
+  ]);
+  
+  const [ticketMessages, setTicketMessages] = useState<Record<string, TicketMessage[]>>({
+    'T-2024-001': [
+      {
+        id: 'msg-1',
+        ticketId: 'T-2024-001',
+        message: 'Здравствуйте! У нас возникла проблема с подключением Telegram бота. Не приходят уведомления о новых сообщениях.',
+        authorId: 'client-1',
+        authorName: 'ООО "ТехСервис"',
+        authorType: 'client',
+        isInternal: false,
+        createdAt: '2024-01-25T10:30:00Z'
+      },
+      {
+        id: 'msg-2',
+        ticketId: 'T-2024-001',
+        message: 'Здравствуйте! Спасибо за обращение. Проверяю настройки вашего бота.',
+        authorId: 'emp-1',
+        authorName: 'Иван Петров',
+        authorType: 'agent',
+        isInternal: false,
+        createdAt: '2024-01-25T11:15:00Z'
+      },
+      {
+        id: 'msg-3',
+        ticketId: 'T-2024-001',
+        message: 'Внутренняя заметка: нужно проверить webhook URL и валидность токена',
+        authorId: 'emp-1',
+        authorName: 'Иван Петров',
+        authorType: 'agent',
+        isInternal: true,
+        createdAt: '2024-01-25T11:16:00Z'
+      }
+    ]
+  });
 
-  const departments = [
-    { name: 'Техподдержка', tickets: 45, active: 12, integrations: ['telegram', 'whatsapp', 'email'] },
-    { name: 'Продажи', tickets: 23, active: 8, integrations: ['whatsapp', 'vk', 'sms'] },
-    { name: 'Интеграции', tickets: 17, active: 5, integrations: ['telegram', 'whatsapp', 'email', 'sms'] }
-  ];
+  // CRUD Handlers
+  
+  // Integration handlers
+  const handleCreateIntegration = (integrationData: Omit<Integration, 'id' | 'createdAt' | 'lastSync' | 'messagesCount'>) => {
+    const newIntegration: Integration = {
+      ...integrationData,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      lastSync: new Date().toISOString(),
+      messagesCount: 0
+    };
+    setIntegrations([...integrations, newIntegration]);
+    
+    // Simulate telegram bot client creation
+    if (integrationData.type === 'telegram' && integrationData.status === 'active') {
+      // This would normally connect to Telegram API and set up webhook
+      console.log('Creating Telegram integration:', newIntegration);
+    }
+  };
+  
+  const handleUpdateIntegration = (integrationData: Omit<Integration, 'id' | 'createdAt' | 'lastSync' | 'messagesCount'>) => {
+    if (integrationDialog.integration) {
+      setIntegrations(integrations.map(integration => 
+        integration.id === integrationDialog.integration!.id 
+          ? { ...integration, ...integrationData, lastSync: new Date().toISOString() }
+          : integration
+      ));
+    }
+  };
+  
+  const handleDeleteIntegration = (integrationId: string) => {
+    setIntegrations(integrations.filter(integration => integration.id !== integrationId));
+  };
+  
+  // Ticket handlers
+  const handleCreateTicket = (ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newTicket: Ticket = {
+      ...ticketData,
+      id: `T-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    setTickets([...tickets, newTicket]);
+    
+    // Initialize messages for new ticket
+    setTicketMessages({
+      ...ticketMessages,
+      [newTicket.id]: [
+        {
+          id: `msg-${Date.now()}`,
+          ticketId: newTicket.id,
+          message: ticketData.message,
+          authorId: ticketData.clientId,
+          authorName: ticketData.clientName,
+          authorType: 'client',
+          isInternal: false,
+          createdAt: new Date().toISOString()
+        }
+      ]
+    });
+  };
+  
+  const handleUpdateTicket = (ticketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (ticketDialog.ticket) {
+      setTickets(tickets.map(ticket => 
+        ticket.id === ticketDialog.ticket!.id 
+          ? { ...ticket, ...ticketData, updatedAt: new Date().toISOString() }
+          : ticket
+      ));
+    }
+  };
+  
+  const handleDeleteTicket = (ticketId: string) => {
+    setTickets(tickets.filter(ticket => ticket.id !== ticketId));
+    const newMessages = { ...ticketMessages };
+    delete newMessages[ticketId];
+    setTicketMessages(newMessages);
+  };
+  
+  const handleSendMessage = (ticketId: string, message: string, isInternal: boolean) => {
+    const newMessage: TicketMessage = {
+      id: `msg-${Date.now()}`,
+      ticketId,
+      message,
+      authorId: 'current-user', // Would be current logged in user
+      authorName: 'Текущий пользователь',
+      authorType: 'agent',
+      isInternal,
+      createdAt: new Date().toISOString()
+    };
+    
+    setTicketMessages({
+      ...ticketMessages,
+      [ticketId]: [...(ticketMessages[ticketId] || []), newMessage]
+    });
+    
+    // Update ticket status if needed
+    if (!isInternal) {
+      setTickets(tickets.map(ticket => 
+        ticket.id === ticketId 
+          ? { ...ticket, status: 'open' as const, updatedAt: new Date().toISOString() }
+          : ticket
+      ));
+      
+      // Simulate sending message to client via integration
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (ticket) {
+        console.log(`Sending message to client via ${ticket.channelType}:`, message);
+      }
+    }
+  };
+  
+  const handleUpdateTicketStatus = (ticketId: string, status: Ticket['status']) => {
+    setTickets(tickets.map(ticket => 
+      ticket.id === ticketId 
+        ? { ...ticket, status, updatedAt: new Date().toISOString() }
+        : ticket
+    ));
+  };
+  
+  const handleUpdateTicketPriority = (ticketId: string, priority: Ticket['priority']) => {
+    setTickets(tickets.map(ticket => 
+      ticket.id === ticketId 
+        ? { ...ticket, priority, updatedAt: new Date().toISOString() }
+        : ticket
+    ));
+  };
+  
+  const handleAssignTicket = (ticketId: string, employeeId: string) => {
+    const employee = employees.find(e => e.id === employeeId);
+    setTickets(tickets.map(ticket => 
+      ticket.id === ticketId 
+        ? { 
+            ...ticket, 
+            assigneeId: employeeId,
+            assigneeName: employee?.name,
+            updatedAt: new Date().toISOString()
+          }
+        : ticket
+    ));
+  };
+  
+  // Department handlers
+  const handleCreateDepartment = (departmentData: Omit<Department, 'id' | 'employeeCount' | 'createdAt'>) => {
+    const newDepartment: Department = {
+      ...departmentData,
+      id: `dept-${Date.now()}`,
+      employeeCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    setDepartments([...departments, newDepartment]);
+  };
+  
+  const handleUpdateDepartment = (departmentData: Omit<Department, 'id' | 'employeeCount' | 'createdAt'>) => {
+    if (departmentDialog.department) {
+      setDepartments(departments.map(department => 
+        department.id === departmentDialog.department!.id 
+          ? { ...department, ...departmentData }
+          : department
+      ));
+    }
+  };
+  
+  const handleDeleteDepartment = (departmentId: string) => {
+    setDepartments(departments.filter(department => department.id !== departmentId));
+    // Reassign employees to default department or unassign
+    setEmployees(employees.map(employee => 
+      employee.departmentId === departmentId 
+        ? { ...employee, departmentId: '', departmentName: '' }
+        : employee
+    ));
+  };
+  
+  // Employee handlers
+  const handleCreateEmployee = (employeeData: Omit<Employee, 'id' | 'currentTickets' | 'stats' | 'joinDate' | 'lastLogin'>) => {
+    const newEmployee: Employee = {
+      ...employeeData,
+      id: `emp-${Date.now()}`,
+      currentTickets: 0,
+      joinDate: new Date().toISOString(),
+      stats: {
+        totalTickets: 0,
+        avgResponseTime: 0,
+        satisfactionRating: 0,
+        resolvedTickets: 0
+      }
+    };
+    setEmployees([...employees, newEmployee]);
+    
+    // Update department employee count
+    setDepartments(departments.map(dept => 
+      dept.id === employeeData.departmentId 
+        ? { ...dept, employeeCount: dept.employeeCount + 1 }
+        : dept
+    ));
+  };
+  
+  const handleUpdateEmployee = (employeeData: Omit<Employee, 'id' | 'currentTickets' | 'stats' | 'joinDate' | 'lastLogin'>) => {
+    if (employeeDialog.employee) {
+      const oldDepartmentId = employeeDialog.employee.departmentId;
+      const newDepartmentId = employeeData.departmentId;
+      
+      setEmployees(employees.map(employee => 
+        employee.id === employeeDialog.employee!.id 
+          ? { ...employee, ...employeeData }
+          : employee
+      ));
+      
+      // Update department employee counts if department changed
+      if (oldDepartmentId !== newDepartmentId) {
+        setDepartments(departments.map(dept => {
+          if (dept.id === oldDepartmentId) {
+            return { ...dept, employeeCount: dept.employeeCount - 1 };
+          } else if (dept.id === newDepartmentId) {
+            return { ...dept, employeeCount: dept.employeeCount + 1 };
+          }
+          return dept;
+        }));
+      }
+    }
+  };
+  
+  const handleDeleteEmployee = (employeeId: string) => {
+    const employee = employees.find(e => e.id === employeeId);
+    setEmployees(employees.filter(employee => employee.id !== employeeId));
+    
+    // Update department employee count
+    if (employee) {
+      setDepartments(departments.map(dept => 
+        dept.id === employee.departmentId 
+          ? { ...dept, employeeCount: dept.employeeCount - 1 }
+          : dept
+      ));
+    }
+    
+    // Unassign from tickets
+    setTickets(tickets.map(ticket => 
+      ticket.assigneeId === employeeId 
+        ? { ...ticket, assigneeId: undefined, assigneeName: undefined }
+        : ticket
+    ));
+  };
 
+  // Helper functions
+  const formatDateHelper = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffDays > 0) return `${diffDays} дн. назад`;
+    if (diffHours > 0) return `${diffHours} ч. назад`;
+    return 'Только что';
+  };
+
+  // Calculate stats from real data
   const stats = {
-    totalTickets: 1247,
-    activeTickets: 89,
-    resolvedToday: 156,
+    totalTickets: tickets.length,
+    activeTickets: tickets.filter(t => ['new', 'open', 'pending'].includes(t.status)).length,
+    resolvedToday: tickets.filter(t => {
+      const today = new Date().toDateString();
+      return t.status === 'resolved' && new Date(t.updatedAt).toDateString() === today;
+    }).length,
     avgResponseTime: '2.4ч',
     slaCompliance: 94.2,
     customerSatisfaction: 4.8
@@ -962,384 +1426,134 @@ export default function Index() {
               <Card className="p-6 bg-white/70 backdrop-blur-sm border-slate-200/60">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-slate-900">Управление интеграциями</h2>
-                  <Button className="bg-gradient-to-r from-indigo-600 to-purple-600">
+                  <Button 
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600"
+                    onClick={() => setIntegrationDialog({ open: true })}
+                  >
                     <Icon name="Plus" className="w-4 h-4 mr-2" />
                     Добавить интеграцию
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {/* Telegram Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-                          <Icon name="Send" className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">Telegram Bot</h3>
-                          <p className="text-sm text-slate-500">3 активных подключения</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-green-500/10 text-green-600 border-green-200">Активно</Badge>
-                    </div>
+                  {integrations.map((integration) => {
+                    const getTypeIcon = (type: IntegrationType) => {
+                      switch (type) {
+                        case 'telegram': return { icon: 'MessageCircle', color: 'bg-blue-500' };
+                        case 'whatsapp': return { icon: 'MessageSquare', color: 'bg-green-500' };
+                        case 'email': return { icon: 'Mail', color: 'bg-purple-500' };
+                        case 'vk': return { icon: 'Users', color: 'bg-blue-600' };
+                        case 'sms': return { icon: 'Smartphone', color: 'bg-orange-500' };
+                        default: return { icon: 'Zap', color: 'bg-gray-500' };
+                      }
+                    };
                     
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Тикетов за день</span>
-                        <span className="font-bold">47</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Время ответа</span>
-                        <span className="font-bold text-green-600">1.2ч</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Последняя активность</span>
-                        <span className="font-bold">2 мин назад</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs text-slate-500 mb-2">Подключенные боты:</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">@support_bot</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">@sales_bot</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="BarChart" className="w-4 h-4 mr-2" />
-                        Статистика
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Settings" className="w-4 h-4 mr-2" />
-                        Настроить
-                      </Button>
-                    </div>
-                  </Card>
-
-                  {/* WhatsApp Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                          <Icon name="MessageCircle" className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">WhatsApp</h3>
-                          <p className="text-sm text-slate-500">Business + Web</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-green-500/10 text-green-600 border-green-200">Активно</Badge>
-                    </div>
+                    const typeInfo = getTypeIcon(integration.type);
                     
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Тикетов за день</span>
-                        <span className="font-bold">23</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Время ответа</span>
-                        <span className="font-bold text-green-600">0.8ч</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">QR обновлен</span>
-                        <span className="font-bold">1 час назад</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs text-slate-500 mb-2">Подключения:</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">Business API</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="ExternalLink" className="w-3 h-3" />
-                            </Button>
+                    return (
+                      <Card key={integration.id} className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 ${typeInfo.color} rounded-lg flex items-center justify-center`}>
+                              <Icon name={typeInfo.icon as any} className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-semibold">{integration.name}</h3>
+                              <p className="text-sm text-slate-500">
+                                {integration.type.charAt(0).toUpperCase() + integration.type.slice(1)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className={getStatusColor(integration.status)}>
+                            {integration.status === 'active' && 'Активно'}
+                            {integration.status === 'inactive' && 'Неактивно'}
+                            {integration.status === 'error' && 'Ошибка'}
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-3 mb-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600">Сообщений</span>
+                            <span className="font-bold">{integration.messagesCount}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600">Создано</span>
+                            <span className="font-bold">{formatDateHelper(integration.createdAt)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600">Синхронизация</span>
+                            <span className="font-bold">{formatDateHelper(integration.lastSync)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">WhatsApp Web</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="QrCode" className="w-3 h-3" />
-                            </Button>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="text-xs text-slate-500 mb-2">Конфигурация:</div>
+                          <div className="p-2 bg-slate-50 rounded-lg">
+                            {integration.type === 'telegram' && (
+                              <div className="text-sm">
+                                <div className="text-xs text-slate-500">Bot Token:</div>
+                                <code className="text-xs">***{integration.config.botToken?.slice(-6) || ''}</code>
+                              </div>
+                            )}
+                            {integration.type === 'whatsapp' && (
+                              <div className="text-sm">
+                                <div className="text-xs text-slate-500">Phone ID:</div>
+                                <code className="text-xs">{integration.config.phoneNumberId || 'Не настроен'}</code>
+                              </div>
+                            )}
+                            {integration.type === 'email' && (
+                              <div className="text-sm">
+                                <div className="text-xs text-slate-500">SMTP Host:</div>
+                                <code className="text-xs">{integration.config.smtpHost || 'Не настроен'}</code>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="QrCode" className="w-4 h-4 mr-2" />
-                        QR-код
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Settings" className="w-4 h-4 mr-2" />
-                        Настроить
-                      </Button>
-                    </div>
-                  </Card>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => setIntegrationDialog({ open: true, integration })}
+                          >
+                            <Icon name="Settings" className="w-4 h-4 mr-2" />
+                            Настроить
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleDeleteIntegration(integration.id)}
+                            className="text-red-600 border-red-200 hover:bg-red-50"
+                          >
+                            <Icon name="Trash2" className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  })}
 
-                  {/* Email Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                          <Icon name="Mail" className="w-5 h-5 text-white" />
+                  {/* Add New Integration Card - если нет интеграций */}
+                  {integrations.length === 0 && (
+                    <Card className="p-6 bg-white/50 border-slate-200/60 border-dashed hover:shadow-lg transition-all duration-200">
+                      <div className="text-center">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Icon name="Plus" className="w-8 h-8 text-slate-400" />
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">Email</h3>
-                          <p className="text-sm text-slate-500">IMAP/SMTP</p>
-                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Добавьте первую интеграцию</h3>
+                        <p className="text-sm text-slate-600 mb-4">
+                          Подключите Telegram Bot, WhatsApp, Email или другие каналы для приема сообщений от клиентов
+                        </p>
+                        <Button 
+                          className="bg-gradient-to-r from-indigo-600 to-purple-600"
+                          onClick={() => setIntegrationDialog({ open: true })}
+                        >
+                          <Icon name="Plus" className="w-4 h-4 mr-2" />
+                          Создать интеграцию
+                        </Button>
                       </div>
-                      <Badge className="bg-green-500/10 text-green-600 border-green-200">Активно</Badge>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Писем за день</span>
-                        <span className="font-bold">156</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Время ответа</span>
-                        <span className="font-bold text-amber-600">3.5ч</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Последняя синхронизация</span>
-                        <span className="font-bold">1 мин назад</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs text-slate-500 mb-2">Подключенные ящики:</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">support@company.com</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">sales@company.com</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="TestTube" className="w-4 h-4 mr-2" />
-                        Тест
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Settings" className="w-4 h-4 mr-2" />
-                        Настроить
-                      </Button>
-                    </div>
-                  </Card>
-
-                  {/* VK Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                          <Icon name="Users" className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">ВКонтакте</h3>
-                          <p className="text-sm text-slate-500">Callback API</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-amber-500/10 text-amber-600 border-amber-200">Предупреждение</Badge>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Сообщений за день</span>
-                        <span className="font-bold">12</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Время ответа</span>
-                        <span className="font-bold text-green-600">2.1ч</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Токен истекает</span>
-                        <span className="font-bold text-amber-600">через 3 дня</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs text-slate-500 mb-2">Подключенные сообщества:</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">Техподдержка</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="RefreshCw" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="RefreshCw" className="w-4 h-4 mr-2" />
-                        Обновить
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Settings" className="w-4 h-4 mr-2" />
-                        Настроить
-                      </Button>
-                    </div>
-                  </Card>
-
-                  {/* SMS Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-                          <Icon name="Smartphone" className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">SMS</h3>
-                          <p className="text-sm text-slate-500">Twilio, SMS.RU</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-green-500/10 text-green-600 border-green-200">Активно</Badge>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">SMS за день</span>
-                        <span className="font-bold">8</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Стоимость</span>
-                        <span className="font-bold text-green-600">₽24</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Баланс</span>
-                        <span className="font-bold">₽1,250</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-xs text-slate-500 mb-2">Провайдеры:</div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">Twilio</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                          <span className="text-sm font-medium">SMS.RU</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <Button variant="ghost" size="sm">
-                              <Icon name="Settings" className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="CreditCard" className="w-4 h-4 mr-2" />
-                        Пополнить
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Settings" className="w-4 h-4 mr-2" />
-                        Настроить
-                      </Button>
-                    </div>
-                  </Card>
-
-                  {/* Android App Integration */}
-                  <Card className="p-6 bg-white/50 border-slate-200/60 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-500 rounded-lg flex items-center justify-center">
-                          <Icon name="Smartphone" className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold">Android App</h3>
-                          <p className="text-sm text-slate-500">Мобильное приложение</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-red-500/10 text-red-600 border-red-200">Не настроено</Badge>
-                    </div>
-                    
-                    <div className="space-y-3 mb-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Активных установок</span>
-                        <span className="font-bold">0</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Версия API</span>
-                        <span className="font-bold text-slate-400">-</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Статус</span>
-                        <span className="font-bold text-red-600">Не подключено</span>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 rounded-lg mb-4">
-                      <p className="text-sm text-slate-600 mb-2">Для подключения:</p>
-                      <ul className="text-xs text-slate-500 space-y-1">
-                        <li>• Настройте API ключи</li>
-                        <li>• Скачайте SDK</li>
-                        <li>• Интегрируйте в приложение</li>
-                      </ul>
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="Download" className="w-4 h-4 mr-2" />
-                        Скачать SDK
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <Icon name="FileText" className="w-4 h-4 mr-2" />
-                        Документация
-                      </Button>
-                    </div>
-                  </Card>
+                    </Card>
+                  )}
                 </div>
 
                 {/* Integration Health Monitor */}
@@ -1349,10 +1563,20 @@ export default function Index() {
                     <div className="p-4 border border-slate-200 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Общее здоровье</span>
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <div className={`w-2 h-2 rounded-full ${
+                          integrations.filter(i => i.status === 'active').length / Math.max(integrations.length, 1) >= 0.8 
+                            ? 'bg-green-500' : 'bg-amber-500'
+                        }`}></div>
                       </div>
-                      <p className="text-2xl font-bold text-green-600">94%</p>
-                      <p className="text-xs text-slate-500">5/6 интеграций активны</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {integrations.length > 0 
+                          ? Math.round((integrations.filter(i => i.status === 'active').length / integrations.length) * 100)
+                          : 0
+                        }%
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {integrations.filter(i => i.status === 'active').length}/{integrations.length} интеграций активны
+                      </p>
                     </div>
                     <div className="p-4 border border-slate-200 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
@@ -1367,16 +1591,20 @@ export default function Index() {
                         <span className="text-sm font-medium">Обработано сообщений</span>
                         <Icon name="MessageSquare" className="w-4 h-4 text-purple-500" />
                       </div>
-                      <p className="text-2xl font-bold text-slate-900">2,847</p>
-                      <p className="text-xs text-slate-500">За сегодня</p>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {integrations.reduce((total, integration) => total + integration.messagesCount, 0)}
+                      </p>
+                      <p className="text-xs text-slate-500">За все время</p>
                     </div>
                     <div className="p-4 border border-slate-200 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Ошибки</span>
                         <Icon name="AlertTriangle" className="w-4 h-4 text-amber-500" />
                       </div>
-                      <p className="text-2xl font-bold text-amber-600">3</p>
-                      <p className="text-xs text-slate-500">За последний час</p>
+                      <p className="text-2xl font-bold text-amber-600">
+                        {integrations.filter(i => i.status === 'error').length}
+                      </p>
+                      <p className="text-xs text-slate-500">Интеграций с ошибками</p>
                     </div>
                   </div>
                 </Card>
@@ -2324,6 +2552,54 @@ export default function Index() {
           </Tabs>
         </main>
       </div>
+
+      {/* All Dialogs */}
+      <IntegrationDialog
+        open={integrationDialog.open}
+        onOpenChange={(open) => setIntegrationDialog({ open })}
+        integration={integrationDialog.integration}
+        onSave={integrationDialog.integration ? handleUpdateIntegration : handleCreateIntegration}
+      />
+
+      <TicketDialog
+        open={ticketDialog.open}
+        onOpenChange={(open) => setTicketDialog({ open })}
+        ticket={ticketDialog.ticket}
+        clients={clients}
+        employees={employees.map(emp => ({ id: emp.id, name: emp.name, department: emp.departmentName }))}
+        departments={departments.map(dept => ({ id: dept.id, name: dept.name }))}
+        onSave={ticketDialog.ticket ? handleUpdateTicket : handleCreateTicket}
+      />
+
+      {ticketDetailDialog.ticket && (
+        <TicketDetailDialog
+          open={ticketDetailDialog.open}
+          onOpenChange={(open) => setTicketDetailDialog({ open })}
+          ticket={ticketDetailDialog.ticket}
+          messages={ticketMessages[ticketDetailDialog.ticket.id] || []}
+          employees={employees.map(emp => ({ id: emp.id, name: emp.name, department: emp.departmentName }))}
+          onSendMessage={(message, isInternal) => handleSendMessage(ticketDetailDialog.ticket!.id, message, isInternal)}
+          onUpdateStatus={(status) => handleUpdateTicketStatus(ticketDetailDialog.ticket!.id, status)}
+          onUpdatePriority={(priority) => handleUpdateTicketPriority(ticketDetailDialog.ticket!.id, priority)}
+          onAssignTicket={(employeeId) => handleAssignTicket(ticketDetailDialog.ticket!.id, employeeId)}
+        />
+      )}
+
+      <DepartmentDialog
+        open={departmentDialog.open}
+        onOpenChange={(open) => setDepartmentDialog({ open })}
+        department={departmentDialog.department}
+        employees={employees.map(emp => ({ id: emp.id, name: emp.name, email: emp.email, role: emp.role, department: emp.departmentName }))}
+        onSave={departmentDialog.department ? handleUpdateDepartment : handleCreateDepartment}
+      />
+
+      <EmployeeDialog
+        open={employeeDialog.open}
+        onOpenChange={(open) => setEmployeeDialog({ open })}
+        employee={employeeDialog.employee}
+        departments={departments.map(dept => ({ id: dept.id, name: dept.name, color: dept.color }))}
+        onSave={employeeDialog.employee ? handleUpdateEmployee : handleCreateEmployee}
+      />
     </div>
   );
 }
