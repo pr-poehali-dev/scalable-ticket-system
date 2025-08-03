@@ -876,10 +876,10 @@ export default function Index() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 bg-gradient-to-br from-slate-200 to-slate-300 rounded-full flex items-center justify-center">
-                                <span className="text-xs font-medium">{ticket.client.split(' ')[0][0]}</span>
+                                <span className="text-xs font-medium">{ticket.clientName?.split(' ')[0]?.[0] || '?'}</span>
                               </div>
                               <div>
-                                <div className="text-sm font-medium">{ticket.client}</div>
+                                <div className="text-sm font-medium">{ticket.clientName}</div>
                                 <div className="text-xs text-slate-500">ID: CL-{Math.floor(Math.random() * 10000)}</div>
                               </div>
                             </div>
