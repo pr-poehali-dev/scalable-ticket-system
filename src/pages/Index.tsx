@@ -520,6 +520,27 @@ export default function Index() {
     return 'Только что';
   };
 
+  // Helper function to calculate SLA status
+  const getSlaStatus = (slaDeadline?: string): string => {
+    if (!slaDeadline) return 'Не установлен';
+    
+    try {
+      const deadline = new Date(slaDeadline);
+      const now = new Date();
+      
+      // Check if date is valid
+      if (isNaN(deadline.getTime())) return 'Некорректная дата';
+      
+      const hoursLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60));
+      
+      if (hoursLeft < 0) return 'Просрочено';
+      if (hoursLeft <= 2) return `Осталось ${hoursLeft}ч`;
+      return 'В норме';
+    } catch (error) {
+      return 'Ошибка расчета';
+    }
+  };
+
   // Calculate stats from real data
   const stats = {
     totalTickets: tickets.length,
@@ -865,8 +886,8 @@ export default function Index() {
                             <div className="font-medium text-slate-900">{ticket.id}</div>
                             <div className="text-sm text-slate-600 max-w-xs truncate">{ticket.subject}</div>
                             <div className="flex items-center gap-2 text-xs">
-                              <Badge variant="outline" className="text-xs">{ticket.department}</Badge>
-                              {ticket.status === 'in_progress' && (
+                              <Badge variant="outline" className="text-xs">{ticket.departmentName}</Badge>
+                              {ticket.status === 'open' && (
                                 <Badge className="bg-amber-500/10 text-amber-600 border-amber-200 text-xs">
                                   В работе
                                 </Badge>
@@ -913,14 +934,14 @@ export default function Index() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <Icon name={getChannelIcon(ticket.channel) as any} className="w-4 h-4 text-slate-600" />
-                              <span className="text-sm capitalize">{ticket.channel}</span>
+                              <Icon name={getChannelIcon(ticket.channelType) as any} className="w-4 h-4 text-slate-600" />
+                              <span className="text-sm capitalize">{ticket.channelType}</span>
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Select value={ticket.assignee}>
+                            <Select value={ticket.assigneeName || ''}>
                               <SelectTrigger className="w-36 h-8">
-                                <SelectValue />
+                                <SelectValue placeholder="Не назначен" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="Иван Петров">Иван Петров</SelectItem>
@@ -932,22 +953,29 @@ export default function Index() {
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
-                              <span className={`text-sm font-medium ${
-                                ticket.sla.includes('Просрочено') ? 'text-red-600' : 
-                                ticket.sla.includes('В норме') ? 'text-green-600' : 'text-slate-600'
-                              }`}>
-                                {ticket.sla}
-                              </span>
-                              <div className="w-full bg-slate-200 rounded-full h-1">
-                                <div className={`h-1 rounded-full ${
-                                  ticket.sla.includes('Просрочено') ? 'bg-red-500' : 
-                                  ticket.sla.includes('В норме') ? 'bg-green-500' : 'bg-amber-500'
-                                }`} style={{ width: ticket.sla.includes('Просрочено') ? '100%' : '60%' }}></div>
-                              </div>
+                              {(() => {
+                                const slaStatus = getSlaStatus(ticket.slaDeadline);
+                                return (
+                                  <>
+                                    <span className={`text-sm font-medium ${
+                                      slaStatus?.includes('Просрочено') ? 'text-red-600' : 
+                                      slaStatus?.includes('В норме') ? 'text-green-600' : 'text-slate-600'
+                                    }`}>
+                                      {slaStatus}
+                                    </span>
+                                    <div className="w-full bg-slate-200 rounded-full h-1">
+                                      <div className={`h-1 rounded-full ${
+                                        slaStatus?.includes('Просрочено') ? 'bg-red-500' : 
+                                        slaStatus?.includes('В норме') ? 'bg-green-500' : 'bg-amber-500'
+                                      }`} style={{ width: slaStatus?.includes('Просрочено') ? '100%' : '60%' }}></div>
+                                    </div>
+                                  </>
+                                );
+                              })()} 
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm text-slate-600">{ticket.created}</div>
+                            <div className="text-sm text-slate-600">{formatDateHelper(ticket.createdAt)}</div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
@@ -1309,11 +1337,11 @@ export default function Index() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-slate-600">Всего тикетов</span>
-                          <span className="font-bold">{dept.tickets}</span>
+                          <span className="font-bold">{tickets.filter(t => t.departmentId === dept.id).length}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-slate-600">Активные</span>
-                          <span className="font-bold text-amber-600">{dept.active}</span>
+                          <span className="font-bold text-amber-600">{tickets.filter(t => t.departmentId === dept.id && ['new', 'open', 'pending'].includes(t.status)).length}</span>
                         </div>
                         
                         <Separator />
@@ -1321,7 +1349,7 @@ export default function Index() {
                         <div>
                           <p className="text-sm text-slate-600 mb-2">Интеграции:</p>
                           <div className="flex flex-wrap gap-2">
-                            {dept.integrations.map((integration) => (
+                            {['telegram', 'whatsapp', 'email'].map((integration) => (
                               <Badge key={integration} variant="outline" className="text-xs">
                                 <Icon name={getChannelIcon(integration) as any} className="w-3 h-3 mr-1" />
                                 {integration}
